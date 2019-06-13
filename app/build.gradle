@@ -1,0 +1,198 @@
+apply plugin: 'com.android.application'
+
+android {
+    //以下为签名的配置
+    signingConfigs {
+        config {
+            keyAlias rootProject.ext.signingConfigs.keyAlias
+            keyPassword rootProject.ext.signingConfigs.keyPassword
+            storeFile file (rootProject.ext.signingConfigs.storeFile)
+            storePassword rootProject.ext.signingConfigs.storePassword
+        }
+    }
+    compileSdkVersion rootProject.ext.android.compileSdkVersion
+    defaultConfig {
+        applicationId rootProject.ext.defaultConfig.applicationId
+        versionCode rootProject.ext.defaultConfig.versionCode
+        versionName rootProject.ext.defaultConfig.versionName
+        minSdkVersion rootProject.ext.android.minSdkVersion
+        targetSdkVersion rootProject.ext.android.targetSdkVersion
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        //添加多 dex分包支持
+        multiDexEnabled true
+        //BuildConfig属性
+        //公共
+        buildConfigField 'String', 'APPID', rootProject.ext.commonInfo.appId
+        buildConfigField 'String', 'CACHE_DIR', rootProject.ext.commonInfo.cacheDir
+        buildConfigField 'String', 'APK_DOWNLOAD_DIR', rootProject.ext.commonInfo.apkDownloadDir
+        //个性化
+
+    }
+    buildTypes {
+        // 编译配置，release或debug版本的内容
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.config
+        }
+        debug {
+            minifyEnabled false
+            debuggable true
+            testCoverageEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    android.applicationVariants.all { variant ->
+        variant.outputs.all {//这里是all，下面是根据自己的情况来定制
+            def date = new Date()
+            def formattedDate = date.format('yyyyMMddHHmmss')
+            def fileName
+            if (variant.buildType.name == "release") {
+                // 输出apk名称为app_100_release.apk
+                fileName = "${rootProject.ext.outApkInfo.appName}-app-V${defaultConfig.versionName}_${formattedDate}.apk"
+            } else if (variant.buildType.name == "debug") {
+                // 输出apk名称为app_100_debug.apk
+                fileName = "${rootProject.ext.outApkInfo.appName}_debug_V${defaultConfig.versionName}_${formattedDate}.apk"
+            } else {
+                // 输出apk名称为app_v1.0.0_2017-12-11_101_beta.apk
+                fileName = "${rootProject.ext.outApkInfo.appName}_Beta_V${defaultConfig.versionName}.apk"
+            }
+            //outputFileName = "HuaxiaSign_${defaultConfig.versionName}_${formattedDate}.apk"
+            outputFileName = fileName
+        }
+    }
+
+    //打包时的相关配置
+    packagingOptions {
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/LICENSE.txt'
+        exclude 'META-INF/NOTICE.txt'
+    }
+    //对于dex 的--multi-dex 选项设置与预编译的library工程有冲突,因此如果你的应用中包含引用的lirary工程,需要将预编译设置为false:
+    dexOptions {
+        javaMaxHeapSize "4g"
+        preDexLibraries = false
+    }
+    //源码设置(项目目录结构的设置)
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['libs']
+        }
+    }
+    repositories {
+        flatDir {
+            dirs 'libs'   // aar目录
+        }
+    }
+    //编译的 lint 开关，程序在buid的时候，会执行lint检查，有任何的错误或者警告提示，都会终止构建，我们可以将其关掉。
+    lintOptions {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+    // Java 的版本配置
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    configurations.all {
+        resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+            def requested = details.requested
+            if (requested.group == 'com.android.support') {
+                if (!requested.name.startsWith("multidex")) {
+                    details.useVersion '26.0.2'
+                }
+            }
+        }
+    }
+
+    //加速 gradle.build 编译任务
+    tasks.whenTaskAdded { task ->
+        if (task.name.contains("lint")
+                //如果instant run不生效，把clean这行干掉
+                || task.name.equals("clean")
+                //如果项目中有用到aidl则不可以舍弃这个任务
+                || task.name.contains("Aidl")
+                //用不到测试的时候就可以先关闭
+                || task.name.contains("mockableAndroidJar")
+                || task.name.contains("UnitTest")
+                || task.name.contains("AndroidTest")
+                //用不到NDK和JNI的也关闭掉
+                || task.name.contains("Ndk")
+//                || task.name.contains("Jni")
+        ) {
+            task.enabled = false
+        }
+    }
+    productFlavors {
+    }
+    //Android6.0以上使用Apache HTTP client
+    useLibrary 'org.apache.http.legacy'
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'com.android.support:appcompat-v7:28.0.0'
+    implementation 'com.android.support.constraint:constraint-layout:1.1.3'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+}
+
+//以下为AOP相关代码
+buildscript {
+    repositories {
+        maven { url "http://maven.aliyun.com/nexus/content/groups/public/" }
+        maven { url "http://nexus.csctek.com.cn/nexus/content/repository/public/" }
+    }
+    dependencies {
+        classpath 'org.aspectj:aspectjtools:1.8.10'
+    }
+}
+
+import org.aspectj.bridge.IMessage
+import org.aspectj.bridge.MessageHandler
+import org.aspectj.tools.ajc.Main
+
+final def log = project.logger
+final def variants = project.android.applicationVariants
+//在构建工程时，执行编织
+variants.all { variant ->
+    JavaCompile javaCompile = variant.javaCompile
+    javaCompile.doLast {
+        String[] args = ["-showWeaveInfo",
+                         "-1.5",
+                         "-inpath", javaCompile.destinationDir.toString(),
+                         "-aspectpath", javaCompile.classpath.asPath,
+                         "-d", javaCompile.destinationDir.toString(),
+                         "-classpath", javaCompile.classpath.asPath,
+                         "-bootclasspath", project.android.bootClasspath.join(File.pathSeparator)]
+        log.debug "ajc args: " + Arrays.toString(args)
+
+        MessageHandler handler = new MessageHandler(true);
+        new Main().run(args, handler);
+        for (IMessage message : handler.getMessages(null, true)) {
+            switch (message.getKind()) {
+                case IMessage.ABORT:
+                case IMessage.ERROR:
+                case IMessage.FAIL:
+                    log.error message.message, message.thrown
+                    break;
+                case IMessage.WARNING:
+                    log.warn message.message, message.thrown
+                    break;
+                case IMessage.INFO:
+                    log.info message.message, message.thrown
+                    break;
+                case IMessage.DEBUG:
+                    log.debug message.message, message.thrown
+                    break;
+            }
+        }
+    }
+}
+
+
+

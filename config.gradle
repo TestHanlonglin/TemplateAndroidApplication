@@ -1,0 +1,43 @@
+ext {
+    //默认属性
+    android = [
+            compileSdkVersion: 26,
+            minSdkVersion    : 17,
+            targetSdkVersion : 26,
+    ]
+
+    defaultConfig = [
+            applicationId :'com.dragonforest.android.templateandroidapplication',
+            versionCode :1,
+            versionName :'1.0',
+    ]
+
+    dependencies = [
+            appcompatV7 : 'com.android.support:appcompat-v7:26.1.0',
+            design      : 'com.android.support:design:26.1.0'
+    ]
+
+    signingConfigs = [
+            keyAlias      :'xxxxxxx',
+            keyPassword   :'xxxxxxx',
+            storeFile     :'/android.keystore',
+            storePassword :'xxxxxxx'
+    ]
+
+    outApkInfo = [
+            appName :'xxxxxxx'
+    ]
+
+    //BuildConfig属性
+    //公共
+    commonInfo = [
+            appId   : '"xxxxxxx"',
+            cacheDir : '"/mnt/sdcard/crash/xxxxxxx/"',
+            apkDownloadDir : '"/mnt/sdcard/DYYP/ISERVERAS/PREINST/"'
+    ]
+
+    //个性化
+    personalInfo = [
+
+    ]
+}
